@@ -100,6 +100,23 @@ by the given name"
 	    :collect `(progn ,expansion 
 			     ,(when more? `(format ,stream ", "))))))) ;`(write-char #\, ,stream)))))))
 
+(defselector ancestor (stream-var (&rest selectors))
+  "comma-separted selectors"
+  (let ((expansions (mapcar #'(lambda (sexp)
+				(sexp-selector-to-commands sexp stream-var))
+			    selectors)))
+    `(progn
+       ,@(loop :for (expansion more?) :on expansions
+	    :collect `(progn ,expansion 
+			     ,(when more? `(format ,stream-var " ")))))))
+
+(defselector class (stream-var (selector css-class))
+  "comma-separted selectors"
+  (let ((expansion (sexp-selector-to-commands selector stream-var)))
+    `(progn ,expansion
+	    (format ,stream-var ".")
+	    ,(form-to-commands 'selector css-class stream-var))))
+
 (defgeneric form-to-commands (context form stream-var)
   (:documentation "Generic function to convert an atomic form to a series
 of commands that will write appropriate CSS to the stream designated by STREAM-VAR
@@ -109,7 +126,15 @@ Context is generally a symbol that describes the context of the atomic form
 in the CSS-SEXP document.
 Known values are 'PROPERTY-LVALUE, 'PROPERTY-RVALUE, and 'SELECTOR."))
 
-(defmethod form-to-commands (context (sexp-cons cons) stream-var)
+(defmethod form-to-commands (context form stream-var)
+  "The default behavior is to simply evaluate the form and not write
+anything to the stream."
+  (declare (ignore context stream-var))
+  form)
+
+(defmethod form-to-commands ((context (eql 'property-rvalue))
+			     (sexp-cons cons)
+			     stream-var)
   (let ((result-var (gensym "result"))
 	(result-var0 (gensym "result"))
 	(op (car sexp-cons)))
@@ -139,12 +164,6 @@ Known values are 'PROPERTY-LVALUE, 'PROPERTY-RVALUE, and 'SELECTOR."))
 					    *css-value-shortcut*
 					    *raw-string-shortcut*))))))
 
-(defmethod form-to-commands (context form stream-var)
-  "The default behavior is to simply evaluate the form and not write
-anything to the stream."
-  (declare (ignore context stream-var))
-  form)
-
 (defmethod form-to-commands ((context (eql 'property-lvalue))
 			     (form symbol) 
 			     stream-var)
@@ -173,8 +192,10 @@ For any other symbol, it will simply evaluate it."
   "This will write any non-nil result of evaluating
 the form to the stream after calling CSS-VALUE on the result."
   (typecase form
-    ((or real string)
+    ((or real)
      `(write-string ,(css-value form) ,stream-var))
+    (string
+     `(write-string ,form ,stream-var))
     (t
      (let ((result-var (gensym "result")))
        `(let ((,result-var ,form))

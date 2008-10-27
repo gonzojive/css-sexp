@@ -15,3 +15,9 @@ Part of the Suave project."
 				     (:file "output" :depends-on ("package")))))
   :depends-on ())
 
+(defsystem css-sexp-tests
+  :components ((:module "test"
+                        :components ((:file "test-package")
+				     (:file "basic-tests" :depends-on ("test-package"))
+				     )))
+  :depends-on ("css-sexp" "stefil" "cl-ppcre"))

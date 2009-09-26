@@ -27,6 +27,45 @@
 body should be a valid CSS RULE"
   (sexps-to-commands body stream-var))
 
+(defun simplify-progn-forms (forms)
+  (mapcan #'(lambda (form)
+	      (cond
+		((and (consp form) (eql 'progn (car form)))
+		 (simplify-progn-forms (rest form)))
+		((null form) nil)
+		(t
+		 (list form))))
+	  forms))
+
+(defun simplify-write-sequence-forms (forms)
+  (let ((built-up-write-sequence-string nil)
+	(built-up-write-sequence-stream '#:unique))
+    (let ((result-forms nil))
+      (flet ((push-built-up-form ()
+	       (when (and built-up-write-sequence-string
+			  (> (length built-up-write-sequence-string) 0))
+		 (push `(write-sequence ,built-up-write-sequence-string ,built-up-write-sequence-stream)
+		       result-forms))
+	       (setf built-up-write-sequence-string ""
+		     built-up-write-sequence-stream '#:unique)))
+	(map nil #'(lambda (form)
+		     (cond
+		       ((and (consp form)
+			     (member (car form) '(write-sequence write-string))
+			     (stringp (second form)))
+			(when (not (eql (third form)  built-up-write-sequence-stream))
+			  (push-built-up-form))
+			(setf built-up-write-sequence-string
+			      (concatenate 'string built-up-write-sequence-string (second form)))
+			(setf built-up-write-sequence-stream
+			      (third form)))
+		       (t
+			(push-built-up-form)
+			(push form result-forms))))
+	     forms)
+	(push-built-up-form)
+	(nreverse result-forms)))))
+
 (defmacro with-css-output-to-string ((stream-var) &body body)
   "Same as with-css-output but the result is a string."
   `(with-output-to-string (,stream-var)
@@ -35,17 +74,22 @@ body should be a valid CSS RULE"
 
 (defun sexps-to-commands (sexp-forms stream-var)
   "Converts a list of top-level CSSEXPs into commands (lisp code)."
-  `(progn ,@(mapcar #'(lambda (r) (sexp-rule-to-commands r stream-var))
-		    sexp-forms)))
+  `(progn ,@(simplify-write-sequence-forms
+	     (simplify-progn-forms
+	      (mapcar #'(lambda (r) (sexp-rule-to-commands r stream-var))
+		      sexp-forms)))))
 
 (defun sexp-rule-to-commands (css-sexp-form stream-var)
   "Converts a rule of the form (selector [rule-lvalue rule-rvalue]*) into commands (lisp sexps)."
   (if (consp css-sexp-form)
       `(progn
 	 ,(sexp-selector-to-commands (car css-sexp-form) stream-var)
-	 (format ,stream-var " {~%")
+	 (write-sequence " {
+  " ,stream-var)
 	 ,(sexp-rule-body-to-commands (rest css-sexp-form) stream-var)
-	 (format ,stream-var "}~%"))
+	 (write-sequence "}
+" ,stream-var))
+;	 (format ,stream-var "}~%"))
       (form-to-commands 'rule css-sexp-form stream-var)))  
 
 (defun sexp-rule-body-to-commands (sexp-rule-body stream)
@@ -55,9 +99,10 @@ body should be a valid CSS RULE"
 	  :collect
 	  `(progn
 	     ,(form-to-commands 'property-lvalue prop stream)
-	     (format ,stream ": ")
+	     (write-sequence ": " ,stream)
 	     ,(form-to-commands 'property-rvalue value stream)
-	     (format ,stream ";~%")))))      
+	     (write-sequence ";
+  " ,stream)))))      
 
 (defun sexp-selector-to-commands (sexp-selector stream-var)
   "Converts a selector CSSEXP into lisp SEXP commands."
@@ -98,7 +143,7 @@ by the given name"
     `(progn
        ,@(loop :for (expansion more?) :on expansions
 	    :collect `(progn ,expansion 
-			     ,(when more? `(format ,stream ", "))))))) ;`(write-char #\, ,stream)))))))
+			     ,(when more? `(write-sequence ", " ,stream))))))) ;`(write-char #\, ,stream)))))))
 
 (defselector ancestor (stream-var (&rest selectors))
   "comma-separted selectors"
@@ -108,13 +153,13 @@ by the given name"
     `(progn
        ,@(loop :for (expansion more?) :on expansions
 	    :collect `(progn ,expansion 
-			     ,(when more? `(format ,stream-var " ")))))))
+			     ,(when more? `(write-sequence " " ,stream-var)))))))
 
 (defselector class (stream-var (selector css-class))
   "comma-separted selectors"
   (let ((expansion (sexp-selector-to-commands selector stream-var)))
     `(progn ,expansion
-	    (format ,stream-var ".")
+	    (write-sequence  "." ,stream-var)
 	    ,(form-to-commands 'selector css-class stream-var))))
 
 (defgeneric form-to-commands (context form stream-var)
@@ -171,7 +216,7 @@ anything to the stream."
 For any other symbol, it will simply evaluate it."
   (cond
     ((keywordp form)
-     `(format ,stream-var "~A" ,(css-value form)))
+     `(write-string ,(css-value form) ,stream-var))
     (t
      form)))
 
@@ -182,7 +227,7 @@ For any other symbol, it will simply evaluate it."
 For any other symbol, it will simply evaluate it."
   (cond
     ((keywordp form)
-     `(format ,stream-var "~A" ,(css-value form)))
+     `(write-string ,(css-value form)  ,stream-var))
     (t
      form)))
 

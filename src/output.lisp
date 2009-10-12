@@ -17,6 +17,8 @@
   ((unexpected-value :initarg :unexpected-value :accessor unexpected-value)
    (expected-value-description :initarg :expected-description :accessor expected-value-description
 			       :type (or null string) :initform nil))
+  (:report (lambda (condition stream)
+	     (write-string (expected-value-description condition) stream)))
   (:documentation "Thrown when the type of VALUE is unexpected."))
 
 ;;; the *-to-commands functions all return a single eval-able expression,
@@ -162,6 +164,14 @@ by the given name"
 	    (write-sequence  "." ,stream-var)
 	    ,(form-to-commands 'selector css-class stream-var))))
 
+(defselector id (stream-var (dom-id &optional selector))
+  "comma-separted selectors"
+  (let ((expansion (sexp-selector-to-commands selector stream-var)))
+    `(progn ,expansion
+	    (write-sequence  "#" ,stream-var)
+	    ,(form-to-commands 'selector dom-id stream-var))))
+	    ;,@(when selector (list (form-to-commands 'selector dom-id stream-var))))))
+
 (defgeneric form-to-commands (context form stream-var)
   (:documentation "Generic function to convert an atomic form to a series
 of commands that will write appropriate CSS to the stream designated by STREAM-VAR
@@ -201,6 +211,8 @@ anything to the stream."
 				   (list ,(second sexp-cons) ,(third sexp-cons) ,(fourth sexp-cons)))))
 	  (when ,result-var
 	    (format ,stream-var "rgb(~{~A~^, ~})" ,result-var))))
+      (t `(write-string ,sexp-cons ,stream-var))
+      #+nil
       (t
        (error 'css-sexp-unexpected-value
 	      :unexpected-value (car sexp-cons)

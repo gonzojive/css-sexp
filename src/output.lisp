@@ -1,5 +1,5 @@
 (in-package :css-sexp)
-
+(declaim (optimize (debug 3)))
 (defparameter *format-shortcut* 'fmt)
 (defparameter *raw-string-shortcut* 'raw)
 (defparameter *css-value-shortcut* 'val)
@@ -242,6 +242,13 @@ For any other symbol, it will simply evaluate it."
      `(write-string ,(css-value form)  ,stream-var))
     (t
      form)))
+
+(defmethod form-to-commands ((context (eql 'selector))
+			     (form string)
+			     stream-var)
+  "For a keyword, this will write the downcased keyword to the stream.
+For any other symbol, it will simply evaluate it."
+  `(write-string ,form ,stream-var))
 
 (defmethod form-to-commands ((context (eql 'property-rvalue))
 			     form

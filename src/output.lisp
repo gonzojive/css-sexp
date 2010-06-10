@@ -157,6 +157,16 @@ by the given name"
 	    :collect `(progn ,expansion 
 			     ,(when more? `(write-sequence " " ,stream-var)))))))
 
+(defselector direct-ancestor (stream-var (&rest selectors))
+  "comma-separted selectors"
+  (let ((expansions (mapcar #'(lambda (sexp)
+				(sexp-selector-to-commands sexp stream-var))
+			    selectors)))
+    `(progn
+       ,@(loop :for (expansion more?) :on expansions
+	    :collect `(progn ,expansion 
+			     ,(when more? `(write-sequence " > " ,stream-var)))))))
+
 (defselector class (stream-var (selector css-class))
   "comma-separted selectors"
   (let ((expansion (sexp-selector-to-commands selector stream-var)))

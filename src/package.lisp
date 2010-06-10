@@ -8,6 +8,7 @@
    ;; selector exports
    #:*
    #:ancestor
+   #:direct-ancestor
    #:class
    #:id
    #:pseudo

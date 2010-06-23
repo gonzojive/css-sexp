@@ -18,5 +18,6 @@
    #:attribute~=
    #:attribute\|=
    ;; macro exports
-   #:val #:raw)
+   #:val #:raw
+   #:defrule)
   (:documentation "Cascading Style Sheets in S-Expressions."))

@@ -94,17 +94,34 @@ body should be a valid CSS RULE"
 ;	 (format ,stream-var "}~%"))
       (form-to-commands 'rule css-sexp-form stream-var)))  
 
+(defvar *rule-macro-alist* nil
+  "List of macros used to expand special rule properties into a series of rules.")
+
+(defun register-rule-macro (rule-keyword fn)
+  "Registers a function that will"
+  (push (cons rule-keyword fn) *rule-macro-alist*))
+
+(defmacro defrule (rule-keyword (arg stream-var) &body body)
+  "Defines a custom CSS rule that expands into a form that will output
+CSS rules for the current selector."
+  `(register-rule-macro ',rule-keyword
+                        (lambda (,arg ,stream-var)
+                          ,@body)))
+
 (defun sexp-rule-body-to-commands (sexp-rule-body stream)
   "Converts a list of rules of the form [lvalue rvalue] into commands."
   `(progn
      ,@(loop :for (prop value) :on sexp-rule-body :by #'cddr
-	  :collect
-	  `(progn
-	     ,(form-to-commands 'property-lvalue prop stream)
-	     (write-sequence ": " ,stream)
-	     ,(form-to-commands 'property-rvalue value stream)
-	     (write-sequence ";
-  " ,stream)))))      
+             :collect
+             (let ((macro-expander (cdr (assoc prop *rule-macro-alist*))))
+               (if macro-expander
+                   (funcall macro-expander value stream)
+                   `(progn
+                      ,(form-to-commands 'property-lvalue prop stream)
+                      (write-sequence ": " ,stream)
+                      ,(form-to-commands 'property-rvalue value stream)
+                      (write-sequence ";
+  " ,stream)))))))
 
 (defun sexp-selector-to-commands (sexp-selector stream-var)
   "Converts a selector CSSEXP into lisp SEXP commands."
